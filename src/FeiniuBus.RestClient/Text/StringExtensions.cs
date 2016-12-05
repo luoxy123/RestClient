@@ -1,11 +1,17 @@
 ﻿using System.Net;
 using System.Text;
+using Newtonsoft.Json;
 
 namespace FeiniuBus.RestClient.Text
 {
     public static class StringExtensions
     {
         private const int LowerCaseOffset = 'a' - 'A';
+
+        public static T AsJson<T>(this string text)
+        {
+            return JsonConvert.DeserializeObject<T>(text);
+        }
 
         public static string UrlEncode(this string text)
         {
