@@ -1,16 +1,17 @@
-﻿using System;
+﻿using FeiniuBus.RestClient.Exceptions;
+using FeiniuBus.RestClient.Text;
+using Microsoft.AspNetCore.WebUtilities;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net.Http.Headers;
-using System.IO;
-using System.Net.Http;
-using FeiniuBus.RestClient.Text;
-using Newtonsoft.Json;
-using Microsoft.AspNetCore.WebUtilities;
 
-namespace FeiniuBus.RestClient
+namespace FeiniuBus.RestClient.Services
 {
     public class DefaultRestHttpClient : IRestHttpClient
     {

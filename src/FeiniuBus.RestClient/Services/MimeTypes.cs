@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace FeiniuBus.RestClient
+namespace FeiniuBus.RestClient.Services
 {
     public static class MimeTypes
     {

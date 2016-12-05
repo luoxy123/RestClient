@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Net.Http;
 
-namespace FeiniuBus.RestClient
+namespace FeiniuBus.RestClient.Services
 {
     public static class HttpExtensions
     {

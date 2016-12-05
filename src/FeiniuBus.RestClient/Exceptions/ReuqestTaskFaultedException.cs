@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace FeiniuBus.RestClient
+namespace FeiniuBus.RestClient.Exceptions
 {
     public class ReuqestTaskFaultedException : Exception
     {
