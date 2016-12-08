@@ -1,5 +1,29 @@
 {
-  "version": "1.0.0-*",
+  "version": "1.0.0",
+  "authors": [ "xqlun" ],
+  "title": "FeiniuBus.Restful",
+  "description": "FeiniuBus Restful API Client",
+  "copyright": "Copyright ? 四川易达飞牛交通科技有限公司 2017",
+
+  "packOptions": {
+    "owners": [ "xqlun" ],
+    "projectUrl": "https://github.com/FeiniuBus/RestClient",
+    "licenseUrl": "https://github.com/FeiniuBus/RestClient/blob/master/LICENSE",
+    "iconUrl": "https://s3.cn-north-1.amazonaws.com.cn/nuget-icons/icon175x175.jpeg",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/FeiniuBus/RestClient.git"
+    },
+    "tags": [
+      "restful",
+      "httpclient"
+    ]
+  },
+
+  "buildOptions": {
+    "debugType": "portable",
+    "warningsAsErrors": true
+  },
 
   "dependencies": {
     "Microsoft.AspNetCore.WebUtilities": "1.1.0",
