@@ -1,3 +1,5 @@
 .vs/
 src/FeiniuBus.RestClient/obj/
 src/FeiniuBus.RestClient/bin/
+src/FeiniuBus.Restful/project.lock.json
+*.user
