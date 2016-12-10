@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -33,7 +35,7 @@ namespace FeiniuBus.Restful.Services
         public string Accept { get; set; }
         public string BearerToken { get; set; }
 
-        public Task<TResponse> SendAsync<TResponse>(HttpMethod httpMethod, string absoluteUrl, object request,
+        public async Task<TResponse> SendAsync<TResponse>(HttpMethod httpMethod, string absoluteUrl, object request,
             CancellationToken token = new CancellationToken())
         {
             if (!httpMethod.HasRequestBody() && (request != null))
@@ -47,6 +49,7 @@ namespace FeiniuBus.Restful.Services
             var httpRequest = new HttpRequestMessage(httpMethod, absoluteUrl);
             httpRequest.Headers.Add("Accept", Accept);
             httpRequest.Headers.Add("User-Agent", DefaultUserAgent);
+            httpRequest.Headers.Add("Accept-Encoding", "gzip");
 
             if (httpMethod.HasRequestBody() && (request != null))
             {
@@ -109,42 +112,72 @@ namespace FeiniuBus.Restful.Services
                 token = CancelTokenSource.Token;
             }
 
-            var sendAsyncTask = client.SendAsync(httpRequest, token);
+            var response = await client.SendAsync(httpRequest, token);
             if (typeof(TResponse) == typeof(HttpResponseMessage))
-                return (Task<TResponse>)(object)sendAsyncTask;
-
-            return sendAsyncTask.ContinueWith(responseTask =>
             {
-                var httpRes = responseTask.Result;
+                return (TResponse)(object)response;
+            }
 
-                if (!httpRes.IsSuccessStatusCode)
-                    ThrowIfError(responseTask, httpRes);
+            ThrowIfError(response);
 
-                if (typeof(TResponse) == typeof(string))
-                    return httpRes.Content.ReadAsStringAsync()
-                        .ContinueWith(task => (TResponse)(object)task.Result, token);
-
-                if (typeof(TResponse) == typeof(byte[]))
-                    return httpRes.Content.ReadAsByteArrayAsync()
-                        .ContinueWith(task => (TResponse)(object)task.Result, token);
-
-                if (typeof(TResponse) == typeof(Stream))
-                    return httpRes.Content.ReadAsStreamAsync()
-                        .ContinueWith(task => (TResponse)(object)task.Result, token);
-
-                return httpRes.Content.ReadAsStringAsync().ContinueWith(task =>
+            if (ShouldDecompress(response))
+            {
+                var stream = await response.Content.ReadAsStreamAsync();
+                using (var gzip = new GZipStream(stream, CompressionMode.Decompress, true))
                 {
-                    var body = task.Result;
-                    var response = body.AsJson<TResponse>();
-                    return response;
-                }, token);
-            }, token).Unwrap();
+                    if (typeof(TResponse) == typeof(Stream))
+                    {
+                        var ms = new MemoryStream();
+                        await gzip.CopyToAsync(ms);
+                        ms.Seek(0, SeekOrigin.Begin);
+
+                        return (TResponse) (object) ms;
+                    }
+
+                    if (typeof(TResponse) == typeof(byte[]))
+                    {
+                        var ms = new MemoryStream();
+                        await gzip.CopyToAsync(ms);
+                        ms.Seek(0, SeekOrigin.Begin);
+
+                        return (TResponse) (object) ms.ToArray();
+                    }
+
+                    var reader = new StreamReader(gzip);
+                    var s = await reader.ReadToEndAsync();
+
+                    if (typeof(TResponse) == typeof(string))
+                    {
+                        return (TResponse) (object) s;
+                    }
+
+                    return s.AsJson<TResponse>();
+                }
+            }
+
+            if (typeof(TResponse) == typeof(Stream))
+            {
+                return (TResponse) (object) (await response.Content.ReadAsStreamAsync());
+            }
+
+            if (typeof(TResponse) == typeof(byte[]))
+            {
+                return (TResponse) (object) (await response.Content.ReadAsByteArrayAsync());
+            }
+
+            var result = await response.Content.ReadAsStringAsync();
+            if (typeof(TResponse) == typeof(string))
+            {
+                return (TResponse) (object) result;
+            }
+
+            return result.AsJson<TResponse>();
         }
 
         public void AddHttpRequestHeader(string key, string value)
         {
             HttpClient = GetHttpClient();
-            HttpClient?.DefaultRequestHeaders.Add(key, new[] { value });
+            HttpClient?.DefaultRequestHeaders.Add(key, new[] {value});
         }
 
         public Action<HttpRequestMessage> RequestFilter { get; set; }
@@ -175,6 +208,18 @@ namespace FeiniuBus.Restful.Services
             return SendAsync<TResponse>(httpMethod, ToAbsoluteUrl(relativeOrAbsoluteUrl), request);
         }
 
+        private bool ShouldDecompress(HttpResponseMessage response)
+        {
+            IEnumerable<string> values;
+            if (!response.Headers.TryGetValues("Content-Encoding", out values))
+                return false;
+
+            if (!values.Any(x => string.Equals(x, "gzip", StringComparison.OrdinalIgnoreCase)))
+                return false;
+
+            return true;
+        }
+
         private string ToAbsoluteUrl(string relativeOrAbsoluteUrl)
         {
             return relativeOrAbsoluteUrl.StartsWith("http:") || relativeOrAbsoluteUrl.StartsWith("https:")
@@ -187,12 +232,9 @@ namespace FeiniuBus.Restful.Services
             RequestFilter?.Invoke(request);
         }
 
-        private void ThrowIfError(Task task, HttpResponseMessage httpRes)
+        private void ThrowIfError(HttpResponseMessage httpRes)
         {
             DisposeCancelToken();
-
-            if (task.IsFaulted)
-                throw new ReuqestTaskFaultedException("请求任务失败", task.Exception);
 
             if (!httpRes.IsSuccessStatusCode)
             {
@@ -229,12 +271,10 @@ namespace FeiniuBus.Restful.Services
                 UseCookies = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
-            var client = new HttpClient(handler) { BaseAddress = baseUri };
+            var client = new HttpClient(handler) {BaseAddress = baseUri};
 
             if (BearerToken != null)
-            {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
-            }
 
             return HttpClient = client;
         }
