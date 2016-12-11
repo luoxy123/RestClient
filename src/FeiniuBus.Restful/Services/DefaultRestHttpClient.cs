@@ -12,7 +12,9 @@ using System.Threading.Tasks;
 using FeiniuBus.Restful.Exceptions;
 using FeiniuBus.Restful.Text;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Net.Http.Headers;
 using Newtonsoft.Json;
+using MediaTypeHeaderValue = System.Net.Http.Headers.MediaTypeHeaderValue;
 
 namespace FeiniuBus.Restful.Services
 {
@@ -25,6 +27,7 @@ namespace FeiniuBus.Restful.Services
         {
             ContentType = MimeTypes.Json;
             Accept = MimeTypes.Json;
+            EnableCompression = true;
         }
 
         public CancellationTokenSource CancelTokenSource { get; set; }
@@ -34,6 +37,7 @@ namespace FeiniuBus.Restful.Services
         public string ContentType { get; set; }
         public string Accept { get; set; }
         public string BearerToken { get; set; }
+        public bool EnableCompression { get; set; }
 
         public async Task<TResponse> SendAsync<TResponse>(HttpMethod httpMethod, string absoluteUrl, object request,
             CancellationToken token = new CancellationToken())
@@ -47,9 +51,10 @@ namespace FeiniuBus.Restful.Services
 
             var client = GetHttpClient();
             var httpRequest = new HttpRequestMessage(httpMethod, absoluteUrl);
-            httpRequest.Headers.Add("Accept", Accept);
-            httpRequest.Headers.Add("User-Agent", DefaultUserAgent);
-            httpRequest.Headers.Add("Accept-Encoding", "gzip");
+            httpRequest.Headers.Add(HeaderNames.Accept, Accept);
+            httpRequest.Headers.Add(HeaderNames.UserAgent, DefaultUserAgent);
+            if (EnableCompression)
+                httpRequest.Headers.Add(HeaderNames.AcceptEncoding, "gzip");
 
             if (httpMethod.HasRequestBody() && (request != null))
             {
@@ -114,9 +119,7 @@ namespace FeiniuBus.Restful.Services
 
             var response = await client.SendAsync(httpRequest, token);
             if (typeof(TResponse) == typeof(HttpResponseMessage))
-            {
-                return (TResponse)(object)response;
-            }
+                return (TResponse) (object) response;
 
             ThrowIfError(response);
 
@@ -147,29 +150,21 @@ namespace FeiniuBus.Restful.Services
                     var s = await reader.ReadToEndAsync();
 
                     if (typeof(TResponse) == typeof(string))
-                    {
                         return (TResponse) (object) s;
-                    }
 
                     return s.AsJson<TResponse>();
                 }
             }
 
             if (typeof(TResponse) == typeof(Stream))
-            {
-                return (TResponse) (object) (await response.Content.ReadAsStreamAsync());
-            }
+                return (TResponse) (object) await response.Content.ReadAsStreamAsync();
 
             if (typeof(TResponse) == typeof(byte[]))
-            {
-                return (TResponse) (object) (await response.Content.ReadAsByteArrayAsync());
-            }
+                return (TResponse) (object) await response.Content.ReadAsByteArrayAsync();
 
             var result = await response.Content.ReadAsStringAsync();
             if (typeof(TResponse) == typeof(string))
-            {
                 return (TResponse) (object) result;
-            }
 
             return result.AsJson<TResponse>();
         }
@@ -211,7 +206,7 @@ namespace FeiniuBus.Restful.Services
         private bool ShouldDecompress(HttpResponseMessage response)
         {
             IEnumerable<string> values;
-            if (!response.Headers.TryGetValues("Content-Encoding", out values))
+            if (!response.Headers.TryGetValues(HeaderNames.ContentEncoding, out values))
                 return false;
 
             if (!values.Any(x => string.Equals(x, "gzip", StringComparison.OrdinalIgnoreCase)))
