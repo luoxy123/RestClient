@@ -14,7 +14,6 @@ using FeiniuBus.Restful.Text;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
 using Newtonsoft.Json;
-using MediaTypeHeaderValue = System.Net.Http.Headers.MediaTypeHeaderValue;
 
 namespace FeiniuBus.Restful.Services
 {
@@ -76,12 +75,12 @@ namespace FeiniuBus.Restful.Services
                     else if (bytes != null)
                     {
                         httpRequest.Content = new ByteArrayContent(bytes);
-                        httpRequest.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(ContentType);
+                        httpRequest.Content.Headers.Add(HeaderNames.ContentType, ContentType);
                     }
                     else if (stream != null)
                     {
                         httpRequest.Content = new StreamContent(stream);
-                        httpRequest.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(ContentType);
+                        httpRequest.Content.Headers.Add(HeaderNames.ContentType, ContentType);
                     }
                     else
                     {
@@ -123,46 +122,32 @@ namespace FeiniuBus.Restful.Services
 
             ThrowIfError(response);
 
+            var ms = new MemoryStream();
+            var content = await response.Content.ReadAsStreamAsync();
+
             if (ShouldDecompress(response))
             {
-                var stream = await response.Content.ReadAsStreamAsync();
-                using (var gzip = new GZipStream(stream, CompressionMode.Decompress, true))
+                using (var gzip = new GZipStream(content, CompressionMode.Decompress, true))
                 {
-                    if (typeof(TResponse) == typeof(Stream))
-                    {
-                        var ms = new MemoryStream();
-                        await gzip.CopyToAsync(ms);
-                        ms.Seek(0, SeekOrigin.Begin);
-
-                        return (TResponse) (object) ms;
-                    }
-
-                    if (typeof(TResponse) == typeof(byte[]))
-                    {
-                        var ms = new MemoryStream();
-                        await gzip.CopyToAsync(ms);
-                        ms.Seek(0, SeekOrigin.Begin);
-
-                        return (TResponse) (object) ms.ToArray();
-                    }
-
-                    var reader = new StreamReader(gzip);
-                    var s = await reader.ReadToEndAsync();
-
-                    if (typeof(TResponse) == typeof(string))
-                        return (TResponse) (object) s;
-
-                    return s.AsJson<TResponse>();
+                    await gzip.CopyToAsync(ms);
+                    ms.Seek(0, SeekOrigin.Begin);
                 }
+            }
+            else
+            {
+                await content.CopyToAsync(ms);
+                ms.Seek(0, SeekOrigin.Begin);
             }
 
             if (typeof(TResponse) == typeof(Stream))
-                return (TResponse) (object) await response.Content.ReadAsStreamAsync();
+                return (TResponse) (object) ms;
 
             if (typeof(TResponse) == typeof(byte[]))
-                return (TResponse) (object) await response.Content.ReadAsByteArrayAsync();
+                return (TResponse) (object) ms.ToArray();
 
-            var result = await response.Content.ReadAsStringAsync();
+            var reader = new StreamReader(ms);
+            var result = await reader.ReadToEndAsync();
+
             if (typeof(TResponse) == typeof(string))
                 return (TResponse) (object) result;
 
