@@ -4,12 +4,15 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FeiniuBus.Restful.Exceptions;
 using FeiniuBus.Restful.Text;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Net.Http.Headers;
 using Newtonsoft.Json;
 
 namespace FeiniuBus.Restful.Services
@@ -23,6 +26,8 @@ namespace FeiniuBus.Restful.Services
         {
             ContentType = MimeTypes.Json;
             Accept = MimeTypes.Json;
+            EnableCompression = false;
+            ClientCertificates = new X509Certificate2Collection();
         }
 
         public CancellationTokenSource CancelTokenSource { get; set; }
@@ -32,11 +37,12 @@ namespace FeiniuBus.Restful.Services
         public string ContentType { get; set; }
         public string Accept { get; set; }
         public string BearerToken { get; set; }
+        public bool EnableCompression { get; set; }
 
         public Task<TResponse> SendAsync<TResponse>(HttpMethod httpMethod, string absoluteUrl, object request,
             CancellationToken token = new CancellationToken())
         {
-            if (!httpMethod.HasRequestBody() && (request != null))
+            if (!httpMethod.HasRequestBody() && request != null)
             {
                 var queryString = QueryStringSerializer.SerializeObject(request);
                 if (!string.IsNullOrEmpty(queryString))
@@ -45,10 +51,12 @@ namespace FeiniuBus.Restful.Services
 
             var client = GetHttpClient();
             var httpRequest = new HttpRequestMessage(httpMethod, absoluteUrl);
-            httpRequest.Headers.Add("Accept", Accept);
-            httpRequest.Headers.Add("User-Agent", DefaultUserAgent);
+            httpRequest.Headers.Add(HeaderNames.Accept, Accept);
+            httpRequest.Headers.Add(HeaderNames.UserAgent, DefaultUserAgent);
+            if (EnableCompression)
+                httpRequest.Headers.Add(HeaderNames.AcceptEncoding, "gzip");
 
-            if (httpMethod.HasRequestBody() && (request != null))
+            if (httpMethod.HasRequestBody() && request != null)
             {
                 var httpContent = request as HttpContent;
                 if (httpContent != null)
@@ -68,12 +76,12 @@ namespace FeiniuBus.Restful.Services
                     else if (bytes != null)
                     {
                         httpRequest.Content = new ByteArrayContent(bytes);
-                        httpRequest.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(ContentType);
+                        httpRequest.Content.Headers.Add(HeaderNames.ContentType, ContentType);
                     }
                     else if (stream != null)
                     {
                         httpRequest.Content = new StreamContent(stream);
-                        httpRequest.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(ContentType);
+                        httpRequest.Content.Headers.Add(HeaderNames.ContentType, ContentType);
                     }
                     else
                     {
@@ -111,26 +119,26 @@ namespace FeiniuBus.Restful.Services
 
             var sendAsyncTask = client.SendAsync(httpRequest, token);
             if (typeof(TResponse) == typeof(HttpResponseMessage))
-                return (Task<TResponse>)(object)sendAsyncTask;
+                return (Task<TResponse>) (object) sendAsyncTask;
 
             return sendAsyncTask.ContinueWith(responseTask =>
             {
                 var httpRes = responseTask.Result;
 
                 if (!httpRes.IsSuccessStatusCode)
-                    ThrowIfError(responseTask, httpRes);
+                    ThrowIfError(httpRes);
 
                 if (typeof(TResponse) == typeof(string))
                     return httpRes.Content.ReadAsStringAsync()
-                        .ContinueWith(task => (TResponse)(object)task.Result, token);
+                        .ContinueWith(task => (TResponse) (object) task.Result, token);
 
                 if (typeof(TResponse) == typeof(byte[]))
                     return httpRes.Content.ReadAsByteArrayAsync()
-                        .ContinueWith(task => (TResponse)(object)task.Result, token);
+                        .ContinueWith(task => (TResponse) (object) task.Result, token);
 
                 if (typeof(TResponse) == typeof(Stream))
                     return httpRes.Content.ReadAsStreamAsync()
-                        .ContinueWith(task => (TResponse)(object)task.Result, token);
+                        .ContinueWith(task => (TResponse) (object) task.Result, token);
 
                 return httpRes.Content.ReadAsStringAsync().ContinueWith(task =>
                 {
@@ -144,7 +152,7 @@ namespace FeiniuBus.Restful.Services
         public void AddHttpRequestHeader(string key, string value)
         {
             HttpClient = GetHttpClient();
-            HttpClient?.DefaultRequestHeaders.Add(key, new[] { value });
+            HttpClient?.DefaultRequestHeaders.Add(key, new[] {value});
         }
 
         public Action<HttpRequestMessage> RequestFilter { get; set; }
@@ -175,6 +183,11 @@ namespace FeiniuBus.Restful.Services
             return SendAsync<TResponse>(httpMethod, ToAbsoluteUrl(relativeOrAbsoluteUrl), request);
         }
 
+        public X509CertificateCollection ClientCertificates { get; set; }
+
+        public Func<HttpRequestMessage, X509Certificate2, X509Chain, SslPolicyErrors, bool>
+            ServerCertificateCustomValidationCallback { get; set; }
+
         private string ToAbsoluteUrl(string relativeOrAbsoluteUrl)
         {
             return relativeOrAbsoluteUrl.StartsWith("http:") || relativeOrAbsoluteUrl.StartsWith("https:")
@@ -187,12 +200,9 @@ namespace FeiniuBus.Restful.Services
             RequestFilter?.Invoke(request);
         }
 
-        private void ThrowIfError(Task task, HttpResponseMessage httpRes)
+        private void ThrowIfError(HttpResponseMessage httpRes)
         {
             DisposeCancelToken();
-
-            if (task.IsFaulted)
-                throw new ReuqestTaskFaultedException("请求任务失败", task.Exception);
 
             if (!httpRes.IsSuccessStatusCode)
             {
@@ -225,16 +235,24 @@ namespace FeiniuBus.Restful.Services
             var baseUri = BaseUri != null ? new Uri(BaseUri) : null;
             var handler = new HttpClientHandler
             {
-                ClientCertificateOptions = ClientCertificateOption.Automatic,
                 UseCookies = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
-            var client = new HttpClient(handler) { BaseAddress = baseUri };
+
+            if (ClientCertificates != null && ClientCertificates.Count > 0)
+            {
+                handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+                foreach (var certificate in ClientCertificates)
+                    handler.ClientCertificates.Add(certificate);
+
+                if (ServerCertificateCustomValidationCallback != null)
+                    handler.ServerCertificateCustomValidationCallback = ServerCertificateCustomValidationCallback;
+            }
+
+            var client = new HttpClient(handler) {BaseAddress = baseUri};
 
             if (BearerToken != null)
-            {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
-            }
 
             return HttpClient = client;
         }
