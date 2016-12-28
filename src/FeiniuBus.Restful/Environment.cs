@@ -2,6 +2,6 @@
 {
     public static class Environment
     {
-        public static decimal Version = 1.00m;
+        public static decimal Version = 2.00m;
     }
 }
