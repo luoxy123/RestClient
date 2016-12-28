@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +26,8 @@ namespace FeiniuBus.Restful.Services
         {
             ContentType = MimeTypes.Json;
             Accept = MimeTypes.Json;
-            EnableCompression = true;
+            EnableCompression = false;
+            ClientCertificates = new X509Certificate2Collection();
         }
 
         public CancellationTokenSource CancelTokenSource { get; set; }
@@ -38,10 +39,10 @@ namespace FeiniuBus.Restful.Services
         public string BearerToken { get; set; }
         public bool EnableCompression { get; set; }
 
-        public async Task<TResponse> SendAsync<TResponse>(HttpMethod httpMethod, string absoluteUrl, object request,
+        public Task<TResponse> SendAsync<TResponse>(HttpMethod httpMethod, string absoluteUrl, object request,
             CancellationToken token = new CancellationToken())
         {
-            if (!httpMethod.HasRequestBody() && (request != null))
+            if (!httpMethod.HasRequestBody() && request != null)
             {
                 var queryString = QueryStringSerializer.SerializeObject(request);
                 if (!string.IsNullOrEmpty(queryString))
@@ -55,7 +56,7 @@ namespace FeiniuBus.Restful.Services
             if (EnableCompression)
                 httpRequest.Headers.Add(HeaderNames.AcceptEncoding, "gzip");
 
-            if (httpMethod.HasRequestBody() && (request != null))
+            if (httpMethod.HasRequestBody() && request != null)
             {
                 var httpContent = request as HttpContent;
                 if (httpContent != null)
@@ -116,42 +117,36 @@ namespace FeiniuBus.Restful.Services
                 token = CancelTokenSource.Token;
             }
 
-            var response = await client.SendAsync(httpRequest, token);
+            var sendAsyncTask = client.SendAsync(httpRequest, token);
             if (typeof(TResponse) == typeof(HttpResponseMessage))
-                return (TResponse) (object) response;
+                return (Task<TResponse>) (object) sendAsyncTask;
 
-            ThrowIfError(response);
-
-            var ms = new MemoryStream();
-            var content = await response.Content.ReadAsStreamAsync();
-
-            if (ShouldDecompress(response))
+            return sendAsyncTask.ContinueWith(responseTask =>
             {
-                using (var gzip = new GZipStream(content, CompressionMode.Decompress, true))
+                var httpRes = responseTask.Result;
+
+                if (!httpRes.IsSuccessStatusCode)
+                    ThrowIfError(httpRes);
+
+                if (typeof(TResponse) == typeof(string))
+                    return httpRes.Content.ReadAsStringAsync()
+                        .ContinueWith(task => (TResponse) (object) task.Result, token);
+
+                if (typeof(TResponse) == typeof(byte[]))
+                    return httpRes.Content.ReadAsByteArrayAsync()
+                        .ContinueWith(task => (TResponse) (object) task.Result, token);
+
+                if (typeof(TResponse) == typeof(Stream))
+                    return httpRes.Content.ReadAsStreamAsync()
+                        .ContinueWith(task => (TResponse) (object) task.Result, token);
+
+                return httpRes.Content.ReadAsStringAsync().ContinueWith(task =>
                 {
-                    await gzip.CopyToAsync(ms);
-                    ms.Seek(0, SeekOrigin.Begin);
-                }
-            }
-            else
-            {
-                await content.CopyToAsync(ms);
-                ms.Seek(0, SeekOrigin.Begin);
-            }
-
-            if (typeof(TResponse) == typeof(Stream))
-                return (TResponse) (object) ms;
-
-            if (typeof(TResponse) == typeof(byte[]))
-                return (TResponse) (object) ms.ToArray();
-
-            var reader = new StreamReader(ms);
-            var result = await reader.ReadToEndAsync();
-
-            if (typeof(TResponse) == typeof(string))
-                return (TResponse) (object) result;
-
-            return result.AsJson<TResponse>();
+                    var body = task.Result;
+                    var response = body.AsJson<TResponse>();
+                    return response;
+                }, token);
+            }, token).Unwrap();
         }
 
         public void AddHttpRequestHeader(string key, string value)
@@ -188,17 +183,10 @@ namespace FeiniuBus.Restful.Services
             return SendAsync<TResponse>(httpMethod, ToAbsoluteUrl(relativeOrAbsoluteUrl), request);
         }
 
-        private bool ShouldDecompress(HttpResponseMessage response)
-        {
-            IEnumerable<string> values;
-            if (!response.Headers.TryGetValues(HeaderNames.ContentEncoding, out values))
-                return false;
+        public X509CertificateCollection ClientCertificates { get; set; }
 
-            if (!values.Any(x => string.Equals(x, "gzip", StringComparison.OrdinalIgnoreCase)))
-                return false;
-
-            return true;
-        }
+        public Func<HttpRequestMessage, X509Certificate2, X509Chain, SslPolicyErrors, bool>
+            ServerCertificateCustomValidationCallback { get; set; }
 
         private string ToAbsoluteUrl(string relativeOrAbsoluteUrl)
         {
@@ -247,10 +235,20 @@ namespace FeiniuBus.Restful.Services
             var baseUri = BaseUri != null ? new Uri(BaseUri) : null;
             var handler = new HttpClientHandler
             {
-                ClientCertificateOptions = ClientCertificateOption.Automatic,
                 UseCookies = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
+
+            if (ClientCertificates != null && ClientCertificates.Count > 0)
+            {
+                handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+                foreach (var certificate in ClientCertificates)
+                    handler.ClientCertificates.Add(certificate);
+
+                if (ServerCertificateCustomValidationCallback != null)
+                    handler.ServerCertificateCustomValidationCallback = ServerCertificateCustomValidationCallback;
+            }
+
             var client = new HttpClient(handler) {BaseAddress = baseUri};
 
             if (BearerToken != null)
