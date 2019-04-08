@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>FeiniuBus Restful API Client</Description>
+    <Copyright>Copyright ? �Ĵ��״��ţ��ͨ�Ƽ����޹�˾ 2017</Copyright>
+    <AssemblyTitle>FeiniuBus.Restful</AssemblyTitle>
+    <VersionPrefix>1.1.0</VersionPrefix>
+    <Authors>xqlun</Authors>
+    <TargetFramework>netstandard1.6</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DebugType>portable</DebugType>
+    <AssemblyName>FeiniuBus.Restful</AssemblyName>
+    <PackageId>FeiniuBus.Restful</PackageId>
+    <PackageTags>restful;httpclient</PackageTags>
+    <PackageIconUrl>https://s3.cn-north-1.amazonaws.com.cn/nuget-icons/icon175x175.jpeg</PackageIconUrl>
+    <PackageProjectUrl>https://github.com/FeiniuBus/RestClient</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/FeiniuBus/RestClient/blob/master/LICENSE</PackageLicenseUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/FeiniuBus/RestClient.git</RepositoryUrl>
+    <PackageTargetFallback>$(PackageTargetFallback);dnxcore50</PackageTargetFallback>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="1.1.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="1.1.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
+    <PackageReference Include="System.Reflection.TypeExtensions" Version="4.3.0" />
+  </ItemGroup>
+
+</Project>

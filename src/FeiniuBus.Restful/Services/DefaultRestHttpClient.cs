@@ -227,13 +227,13 @@ namespace FeiniuBus.Restful.Services
             CancelTokenSource = null;
         }
 
-        private HttpClient GetHttpClient()
+        private HttpClient GetHttpClient()          
         {
             if (HttpClient != null)
                 return HttpClient;
 
             var baseUri = BaseUri != null ? new Uri(BaseUri) : null;
-            var handler = new HttpClientHandler
+            var handler = new HttpClientHandler 
             {
                 UseCookies = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate

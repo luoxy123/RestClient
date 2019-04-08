@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.572
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{9FFA383A-0709-46E3-9D0E-DC31771AA27D}"
 EndProject
@@ -10,7 +10,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		global.json = global.json
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FeiniuBus.Restful", "src\FeiniuBus.Restful\FeiniuBus.Restful.csproj", "{139EA10F-DEB5-4C63-BE5E-D0A5A758CBF2}"
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "FeiniuBus.Restful", "src\FeiniuBus.Restful\FeiniuBus.Restful.xproj", "{139EA10F-DEB5-4C63-BE5E-D0A5A758CBF2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,8 +28,5 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{139EA10F-DEB5-4C63-BE5E-D0A5A758CBF2} = {9FFA383A-0709-46E3-9D0E-DC31771AA27D}
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {FEB47321-AE5E-40E2-BE05-5BC60E196921}
 	EndGlobalSection
 EndGlobal
