@@ -130,7 +130,7 @@ namespace FeiniuBus.Restful.Text
 
         public static Attribute[] AllAttributes(this PropertyInfo propertyInfo)
         {
-            return propertyInfo.GetCustomAttributes(true).ToArray();
+            return (Attribute[]) propertyInfo.GetCustomAttributes(true).ToArray();
         }
     }
 }

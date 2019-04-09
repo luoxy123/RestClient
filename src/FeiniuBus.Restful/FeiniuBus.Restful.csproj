@@ -6,7 +6,7 @@
     <AssemblyTitle>FeiniuBus.Restful</AssemblyTitle>
     <VersionPrefix>1.1.0</VersionPrefix>
     <Authors>xqlun</Authors>
-    <TargetFramework>netstandard1.6</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DebugType>portable</DebugType>
     <AssemblyName>FeiniuBus.Restful</AssemblyName>
